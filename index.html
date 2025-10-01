@@ -29,17 +29,21 @@ const DEFAULT_SOURCE = "https://www.eft-ammo.com/api/resetTimers";
 
 // 상인 이미지 매핑 (ef t-ammo 초상 URL)
 const TRADER_IMAGES = {
-  prapor:      "https://www.eft-ammo.com/static/image/traders/Prapor_Portrait.webp",
-  therapist:   "https://www.eft-ammo.com/static/image/traders/Therapist_Portrait.webp",
-  fence:       "https://www.eft-ammo.com/static/image/traders/Fence_Portrait.webp",
-  skier:       "https://www.eft-ammo.com/static/image/traders/Skier_Portrait.webp",
-  peacekeeper: "https://www.eft-ammo.com/static/image/traders/Peacekeeper_Portrait.webp",
-  mechanic:    "https://www.eft-ammo.com/static/image/traders/Mechanic_Portrait.webp",
-  ragman:      "https://www.eft-ammo.com/static/image/traders/Ragman_Portrait.webp",
-  jaeger:      "https://www.eft-ammo.com/static/image/traders/Jaeger_Portrait.webp",
-  lightkeeper: "https://www.eft-ammo.com/static/image/traders/Lightkeeper_Portrait.webp",
-  btrdriver:   "https://www.eft-ammo.com/static/image/traders/Btrdriver_Portrait.webp",
-  ref:         "https://www.eft-ammo.com/static/image/traders/Ref_Portrait.webp"
+  prapor:      "https://static.wikia.nocookie.net/escapefromtarkov_gamepedia/images/9/9d/PraporPortrait.png",
+  therapist:   "https://static.wikia.nocookie.net/escapefromtarkov_gamepedia/images/e/ed/TherapistPortrait.png",
+  fence:       "https://static.wikia.nocookie.net/escapefromtarkov_gamepedia/images/f/f5/FencePortrait.png",
+  skier:       "https://static.wikia.nocookie.net/escapefromtarkov_gamepedia/images/f/f4/SkierPortrait.png",
+  peacekeeper: "https://static.wikia.nocookie.net/escapefromtarkov_gamepedia/images/4/41/PeacekeeperPortrait.png",
+  mechanic:    "https://static.wikia.nocookie.net/escapefromtarkov_gamepedia/images/b/bc/MechanicPortrait.png",
+  ragman:      "https://static.wikia.nocookie.net/escapefromtarkov_gamepedia/images/4/45/RagmanPortrait.png",
+  jaeger:      "https://static.wikia.nocookie.net/escapefromtarkov_gamepedia/images/d/d8/JaegerPortrait.png",
+  lightkeeper: "https://static.wikia.nocookie.net/escapefromtarkov_gamepedia/images/0/0c/LightkeeperPortrait.png",
+
+  // 아래 두 항목은 위키 파일명이 다를 수 있어요.
+  // 일단 가장 널리 쓰이는 파일명 추정값을 넣어두고,
+  // 404가 나면 로컬/직접 올린 이미지를 쓰는 걸 권장합니다.
+  btrdriver:   "https://static.wikia.nocookie.net/escapefromtarkov_gamepedia/images/b/b1/BTR_driverPortrait.png",
+  ref:         "" // (확실한 공식 초상 이미지가 없을 수 있음)
 };
 
 // ===== 유틸 =====
@@ -137,3 +141,4 @@ async function main() {
 main();
 </script>
 </html>
+
