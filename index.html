@@ -59,21 +59,10 @@ function nextSlotTs(now = Date.now()) { return Math.ceil(now / SLOT_MS_FALLBACK)
 
 // 응답 구조에 맞춰 느슨하게 매핑
 function parseRow(x) {
-  const name = x.name || x.trader || x.title || x.normalizedName || x.id || "";
-
-  let nextTs = null;
-  const abs = x.nextResetUtc ?? x.nextReset ?? x.resetTime ?? x.next ?? x.next_reset ?? x.resetAt ?? x.restockAt ?? x.restock ?? null;
-  if (abs != null) {
-    if (typeof abs === "number") nextTs = abs > 1e12 ? abs : abs * 1000;
-    else {
-      const t = Date.parse(abs);
-      if (!Number.isNaN(t)) nextTs = t;
-    }
-  }
-  const secondsLeft = x.secondsLeft ?? x.remains ?? x.remaining ?? x.seconds ?? x.countdown ?? null;
-  const totalSeconds = x.totalSeconds ?? x.periodSeconds ?? null;
-
-  return { name, nextTs, secondsLeft, totalSeconds };
+  const name = x.name; 
+  const nextTs = Date.parse(x.resetTime); 
+  const secondsLeft = x.secondsLeft ?? null;
+  return { name, nextTs, secondsLeft };
 }
 
 async function main() {
@@ -142,4 +131,5 @@ async function main() {
 }
 main();
 </script>
+
 </html>
