@@ -1,5 +1,4 @@
 // /api/eft-proxy.js
-// 허용 도메인만 통과시키는 안전한 CORS 프록시
 const ALLOW = new Set([
   "www.eft-ammo.com",
   "eft-ammo.com",
@@ -17,24 +16,33 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: `Host not allowed: ${u.host}` });
     }
 
+    // 헤더 정리 (host 등 제거)
+    const fwdHeaders = { "user-agent": "Mozilla/5.0" };
+    if (req.headers["content-type"]) fwdHeaders["content-type"] = req.headers["content-type"];
+    if (req.headers["accept"])       fwdHeaders["accept"]       = req.headers["accept"];
+
+    // 바디 준비(POST 등)
+    let body = undefined;
+    if (req.method !== "GET" && req.method !== "HEAD") {
+      if (typeof req.body === "string") body = req.body;
+      else if (req.body) body = JSON.stringify(req.body);
+    }
+
     const upstream = await fetch(url, {
-      method: "GET",
-      headers: { "user-agent": "Mozilla/5.0" }
+      method: req.method || "GET",
+      headers: fwdHeaders,
+      body
     });
 
-    const bodyText = await upstream.text();
+    const text = await upstream.text();
 
-    // CORS 허용
     res.setHeader("Access-Control-Allow-Origin", "*");
-    // 캐시(선택): CDN 60초
     res.setHeader("Cache-Control", "s-maxage=60");
-    // 컨텐츠 타입 유지(없으면 JSON로 가정)
     res.setHeader(
       "Content-Type",
       upstream.headers.get("content-type") || "application/json; charset=utf-8"
     );
-
-    res.status(upstream.status).send(bodyText);
+    res.status(upstream.status).send(text);
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
