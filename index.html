@@ -23,9 +23,17 @@
 <div class="footer">Data: eft-ammo (<code>/api/resetTimers</code>) · Rendered client-side</div>
 
 <script>
-const PROXY_BASE = "/api/eft-proxy?url=";
+/* ================= 설정 ================= */
+const PROXY_BASE = "/api/eft-proxy?url="; // 같은 Vercel 프로젝트의 서버리스 프록시
 const DEFAULT_SOURCE = "https://www.eft-ammo.com/api/resetTimers";
 
+/* 제외할 상인 (소문자 키) */
+const EXCLUDE = new Set(["lightkeeper", "btrdriver", "ref"]);
+
+/* 화면 표시에 쓸 순서(8명만) */
+const TRADER_ORDER = ["prapor","therapist","fence","skier","peacekeeper","mechanic","ragman","jaeger"];
+
+/* ================= 유틸 ================= */
 const qs = new URLSearchParams(location.search);
 const RAW_TARGET = qs.get("url") || DEFAULT_SOURCE;
 const ENDPOINT = PROXY_BASE + encodeURIComponent(RAW_TARGET);
@@ -44,7 +52,7 @@ function fmtRemain(ms){ if(ms<0)ms=0; const s=Math.floor(ms/1000);
 function toSeoul(ts){ const d=new Date(ts);
   return new Intl.DateTimeFormat("ko-KR",{timeZone:"Asia/Seoul",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"}).format(d);}
 
-// resetTimers → [{name, resetTimestamp}]
+/* resetTimers → [{name, resetTimestamp}] */
 function parseRow(x){
   const rawName = String(x.name||"").toLowerCase();
   const name = NAME_FIX(rawName);
@@ -52,19 +60,24 @@ function parseRow(x){
   return { key: rawName, name, nextTs };
 }
 
-// 표시에 쓰는 순서
-const TRADER_ORDER = ["prapor","therapist","fence","skier","peacekeeper","mechanic","ragman","jaeger"];
-function sortByOrder(list){ const idx=new Map(TRADER_ORDER.map((n,i)=>[n,i]));
-  return list.sort((a,b)=>(idx.get(a.key)??999)-(idx.get(b.key)??999)); }
+/* 정렬 헬퍼 */
+function sortByOrder(list){ 
+  const idx=new Map(TRADER_ORDER.map((n,i)=>[n,i]));
+  return list.sort((a,b)=>(idx.get(a.key)??999)-(idx.get(b.key)??999)); 
+}
 
+/* 타이머 JSON */
 async function fetchTimers(){
   const r=await fetch(ENDPOINT);
   if(!r.ok) throw new Error(`resetTimers HTTP ${r.status}`);
   const raw=await r.json();
   const arr=raw?.data?.traderResetTimes ?? [];
-  return arr.map(parseRow).filter(r=>!isNaN(r.nextTs));
+  return arr.map(parseRow)
+            .filter(r=>!isNaN(r.nextTs))
+            .filter(r=>!EXCLUDE.has(r.key)); // ★ 여기서 제외
 }
 
+/* 이미지: tarkov.dev GraphQL에서 가져오기 */
 async function fetchTraderImages(){
   const gqlURL = "https://api.tarkov.dev/graphql";
   const body = JSON.stringify({ query: `query { traders { normalizedName imageLink name } }` });
@@ -78,32 +91,40 @@ async function fetchTraderImages(){
   const map = new Map();
   for (const t of j?.data?.traders || []) {
     const key = String(t.normalizedName||t.name||"").toLowerCase();
-    if (key) map.set(key, t.imageLink || "");
+    if (!EXCLUDE.has(key)) { // ★ 이미지도 제외 셋은 스킵
+      if (key) map.set(key, t.imageLink || "");
+    }
   }
   return map;
 }
 
+/* ================= 메인 ================= */
 async function main(){
   const app=document.getElementById("app");
   try{
-    // 1) 타이머
+    // 1) 타이머(제외 적용됨)
     let list = await fetchTimers();
+
     // 2) 이미지 맵
     const imgMap = await fetchTraderImages();
 
-    // 3) btrdriver/ref 등 그래프QL에 없는 애들 fallback 처리
-    const fallback = new Map([
-      ["btrdriver",""], ["ref",""]
-    ]);
-
-    // 4) 조합 + 표출
+    // 3) 순서 정렬
     list = sortByOrder(list);
+
+    // 4) 렌더
     const grid = h("div",{class:"grid"}, list.map(row=>{
-      const imgSrc = imgMap.get(row.key) || fallback.get(row.key) || "";
-      const img = h("img",{ class:"img", alt: row.name, src: imgSrc, referrerpolicy:"no-referrer",
-        style:"width:56px;height:56px;border-radius:10px;object-fit:cover;background:#eee;" });
-      const name = h("div",{class:"name"}, row.name);
-      const header = h("div",{class:"row"}, img, name);
+      const imgSrc = imgMap.get(row.key) || "";
+      const headerKids = [];
+      if (imgSrc) {
+        const img = h("img", {
+          class:"img", alt: row.name, src: imgSrc, loading:"lazy",
+          referrerpolicy:"no-referrer",
+          onerror:"this.style.display='none'"
+        });
+        headerKids.push(img);
+      }
+      headerKids.push(h("div",{class:"name"}, row.name));
+      const header = h("div",{class:"row"}, ...headerKids);
 
       const timer=h("div",{class:"time"},"—");
       const abs=h("div",{class:"hint"},"(한국 시간: "+toSeoul(row.nextTs)+")");
@@ -121,7 +142,6 @@ async function main(){
 main();
 </script>
 </html>
-
 
 
 
