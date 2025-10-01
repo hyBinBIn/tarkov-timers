@@ -23,113 +23,83 @@
 <div class="footer">Data: eft-ammo (<code>/api/resetTimers</code>) · Rendered client-side</div>
 
 <script>
-// ====== 설정 ======
-const PROXY_BASE = "/api/eft-proxy?url="; // 같은 Vercel 프로젝트의 서버리스 프록시 (상대 경로)
-const DEFAULT_SOURCE = "https://www.eft-ammo.com/api/resetTimers"; // 네가 찾은 실제 URL
-const SLOT_MS_FALLBACK = 2 * 60 * 60 * 1000; // 백업(2시간)
+const PROXY_BASE = "/api/eft-proxy?url=";
+const DEFAULT_SOURCE = "https://www.eft-ammo.com/api/resetTimers";
+const SLOT_MS_FALLBACK = 2 * 60 * 60 * 1000;
 
-// ====== 유틸 ======
 const qs = new URLSearchParams(location.search);
-const RAW_TARGET = qs.get("url") || DEFAULT_SOURCE;       // 필요시 ?url=로 소스 바꿔 테스트 가능
+const RAW_TARGET = qs.get("url") || DEFAULT_SOURCE;
 const ENDPOINT = PROXY_BASE + encodeURIComponent(RAW_TARGET);
 
 function h(tag, attrs={}, ...kids) {
   const el = document.createElement(tag);
-  for (const [k,v] of Object.entries(attrs)) (k === "class" ? (el.className = v) : el.setAttribute(k,v));
+  for (const [k,v] of Object.entries(attrs)) (k==="class"?el.className=v:el.setAttribute(k,v));
   kids.flat().forEach(k => el.append(k?.nodeType ? k : String(k)));
   return el;
 }
-function fmtRemain(ms) {
-  if (ms < 0) ms = 0;
-  const s = Math.floor(ms / 1000);
-  const hh = String(Math.floor(s / 3600)).padStart(2,"0");
-  const mm = String(Math.floor((s % 3600) / 60)).padStart(2,"0");
-  const ss = String(s % 60).padStart(2,"0");
+function fmtRemain(ms){
+  if(ms<0)ms=0;
+  const s=Math.floor(ms/1000);
+  const hh=String(Math.floor(s/3600)).padStart(2,"0");
+  const mm=String(Math.floor((s%3600)/60)).padStart(2,"0");
+  const ss=String(s%60).padStart(2,"0");
   return `${hh}:${mm}:${ss}`;
 }
-function toSeoul(ts) {
-  const d = new Date(ts);
-  return new Intl.DateTimeFormat("ko-KR", {
-    timeZone: "Asia/Seoul",
-    year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", second: "2-digit"
+function toSeoul(ts){
+  const d=new Date(ts);
+  return new Intl.DateTimeFormat("ko-KR",{
+    timeZone:"Asia/Seoul",year:"numeric",month:"2-digit",day:"2-digit",
+    hour:"2-digit",minute:"2-digit",second:"2-digit"
   }).format(d);
 }
-function nextSlotTs(now = Date.now()) { return Math.ceil(now / SLOT_MS_FALLBACK) * SLOT_MS_FALLBACK; }
 
-// 응답 구조에 맞춰 느슨하게 매핑
-function parseRow(x) {
-  const name = x.name; 
-  const nextTs = Date.parse(x.resetTime); 
-  const secondsLeft = x.secondsLeft ?? null;
-  return { name, nextTs, secondsLeft };
+// ✅ 정확 매핑
+function parseRow(x){
+  const name=(x.name||"").replace(/^\w/,c=>c.toUpperCase());
+  const nextTs=Date.parse(x.resetTimestamp); // "2025-10-01T04:21:09.000Z"
+  return { name, nextTs, secondsLeft:null, totalSeconds:null };
 }
 
-async function main() {
-  const app = document.getElementById("app");
-  try {
-    const r = await fetch(ENDPOINT);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const ct = r.headers.get("content-type") || "";
-    const raw = ct.includes("application/json") ? await r.json() : JSON.parse(await r.text());
+async function main(){
+  const app=document.getElementById("app");
+  try{
+    const r=await fetch(ENDPOINT);
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+    const raw=await r.json();
 
-    const arr = Array.isArray(raw) ? raw : (raw.traders || raw.data || raw.result || raw.items || raw.rows || []);
-    if (!Array.isArray(arr) || arr.length === 0) {
-      app.innerHTML = '<div class="error">타이머 데이터가 비어있거나 구조가 다릅니다. 응답 JSON을 확인하세요.</div>';
+    // ✅ 배열 경로 확정
+    const arr = raw?.data?.traderResetTimes ?? [];
+    if(!Array.isArray(arr) || arr.length===0){
+      app.innerHTML='<div class="error">타이머 데이터가 비어있거나 구조가 다릅니다. 응답 JSON을 확인하세요.</div>';
       console.debug("raw response:", raw);
       return;
     }
 
-    const list = arr.map(parseRow).filter(r => r.name);
-    if (list.length === 0) {
-      app.innerHTML = '<div class="error">상인 이름을 찾지 못했습니다. 필드 매핑을 조정하세요.</div>';
-      console.debug("raw response:", raw);
-      return;
-    }
-
-    const grid = h("div", { class: "grid" }, list.map(row => {
-      const timer = h("div", { class: "time" }, "—");
-      const abs = h("div", { class: "hint" }, "");
-      const bar = h("div", { class: "bar" }, h("div", { class: "fill" }));
-      const card = h("div", { class: "card" },
-        h("div", { class: "name" }, row.name),
-        timer, abs, bar
+    const list=arr.map(parseRow).filter(r=>r.name && !isNaN(r.nextTs));
+    const grid=h("div",{class:"grid"}, list.map(row=>{
+      const timer=h("div",{class:"time"},"—");
+      const abs=h("div",{class:"hint"},"(한국 시간: "+toSeoul(row.nextTs)+")");
+      const card=h("div",{class:"card"},
+        h("div",{class:"name"},row.name),
+        timer,abs
       );
 
-      const startedAt = Date.now();
-      const totalMs =
-        row.totalSeconds != null ? row.totalSeconds * 1000 :
-        row.secondsLeft  != null ? row.secondsLeft  * 1000 :
-        row.nextTs ? (row.nextTs - startedAt) :
-        SLOT_MS_FALLBACK;
-
-      function tick() {
-        const now = Date.now();
-        let remainMs = null;
-
-        if (row.secondsLeft != null) remainMs = row.secondsLeft * 1000 - (now - startedAt);
-        else if (row.nextTs)       remainMs = row.nextTs - now;
-        else                       remainMs = nextSlotTs(now) - now;
-
-        timer.textContent = `다음 리셋까지 ${fmtRemain(remainMs)}`;
-        if (row.nextTs) abs.textContent = `(한국 시간: ${toSeoul(row.nextTs)})`;
-
-        const used = Math.max(0, totalMs - Math.max(0, remainMs));
-        const pct = Math.max(0, Math.min(100, (used / (totalMs || SLOT_MS_FALLBACK)) * 100));
-        bar.querySelector(".fill").style.width = pct.toFixed(2) + "%";
+      function tick(){
+        const remainMs=row.nextTs - Date.now();
+        timer.textContent=`다음 리셋까지 ${fmtRemain(remainMs)}`;
       }
-
       tick();
-      setInterval(tick, 1000);
+      setInterval(tick,1000);
       return card;
     }));
 
     app.replaceChildren(grid);
-  } catch (e) {
-    app.innerHTML = `<div class="error">불러오기 실패: ${String(e)}</div>`;
+  }catch(e){
+    app.innerHTML=`<div class="error">불러오기 실패: ${String(e)}</div>`;
   }
 }
 main();
 </script>
 
 </html>
+
