@@ -28,7 +28,8 @@ const PROXY_BASE = "/api/eft-proxy?url="; // 같은 Vercel 프로젝트의 서�
 const DEFAULT_SOURCE = "https://www.eft-ammo.com/api/resetTimers";
 
 /* 제외할 상인 (소문자 키) */
-const EXCLUDE = new Set(["lightkeeper", "Btr driver", "ref"]);
+const EXCLUDE_RAW = ["lightkeeper", "Btr driver", "ref"];
+const EXCLUDE = new Set(EXCLUDE_RAW.map(s => String(s).toLowerCase().trim()));
 
 /* 화면 표시에 쓸 순서(8명만) */
 const TRADER_ORDER = ["prapor","therapist","fence","skier","peacekeeper","mechanic","ragman","jaeger"];
@@ -142,6 +143,7 @@ async function main(){
 main();
 </script>
 </html>
+
 
 
 
