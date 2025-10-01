@@ -5,17 +5,17 @@
 <title>EFT 상인 리셋 타이머</title>
 <style>
   :root { color-scheme: light dark; }
-  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 14px; }
-  h2 { margin: 0 0 12px; font-size: 18px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px,1fr)); gap: 12px; }
-  .card { border: 1px solid #ddd; border-radius: 12px; padding: 12px; }
-  .name { font-weight: 700; margin-bottom: 4px; }
-  .time { font-size: 1.1rem; }
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 16px; }
+  h2 { margin: 0 0 14px; font-size: 18px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap: 12px; }
+  .card { border: 1px solid #ddd; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; align-items: flex-start; }
+  .row  { display: flex; gap: 10px; align-items: center; width: 100%; }
+  .name { font-weight: 800; font-size: 16px; }
+  .time { font-size: 1.15rem; margin-top: 8px; }
   .hint { color: #666; font-size: 12px; margin-top: 6px; }
+  .img  { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; background: #eee; flex: 0 0 auto; }
   .error { color: #c00; white-space: pre-wrap; }
-  .bar  { height: 6px; background: #eee; border-radius: 99px; overflow: hidden; margin-top: 6px; }
-  .fill { height: 100%; width: 0%; background: #6aa9ff; transition: width 0.2s linear; }
-  .footer { color:#666; font-size:12px; margin-top:10px }
+  .footer { color:#666; font-size:12px; margin-top:12px }
 </style>
 
 <h2>타르코프 상인 리셋 타이머</h2>
@@ -23,13 +23,31 @@
 <div class="footer">Data: eft-ammo (<code>/api/resetTimers</code>) · Rendered client-side</div>
 
 <script>
-const PROXY_BASE = "/api/eft-proxy?url=";
+// ===== 설정 =====
+const PROXY_BASE = "/api/eft-proxy?url="; // 같은 Vercel 프로젝트의 서버리스 프록시 (상대경로)
 const DEFAULT_SOURCE = "https://www.eft-ammo.com/api/resetTimers";
-const SLOT_MS_FALLBACK = 2 * 60 * 60 * 1000;
 
+// 상인 이미지 매핑 (ef t-ammo 초상 URL)
+const TRADER_IMAGES = {
+  prapor:      "https://www.eft-ammo.com/static/image/traders/Prapor_Portrait.webp",
+  therapist:   "https://www.eft-ammo.com/static/image/traders/Therapist_Portrait.webp",
+  fence:       "https://www.eft-ammo.com/static/image/traders/Fence_Portrait.webp",
+  skier:       "https://www.eft-ammo.com/static/image/traders/Skier_Portrait.webp",
+  peacekeeper: "https://www.eft-ammo.com/static/image/traders/Peacekeeper_Portrait.webp",
+  mechanic:    "https://www.eft-ammo.com/static/image/traders/Mechanic_Portrait.webp",
+  ragman:      "https://www.eft-ammo.com/static/image/traders/Ragman_Portrait.webp",
+  jaeger:      "https://www.eft-ammo.com/static/image/traders/Jaeger_Portrait.webp",
+  lightkeeper: "https://www.eft-ammo.com/static/image/traders/Lightkeeper_Portrait.webp",
+  btrdriver:   "https://www.eft-ammo.com/static/image/traders/Btrdriver_Portrait.webp",
+  ref:         "https://www.eft-ammo.com/static/image/traders/Ref_Portrait.webp"
+};
+
+// ===== 유틸 =====
 const qs = new URLSearchParams(location.search);
-const RAW_TARGET = qs.get("url") || DEFAULT_SOURCE;
+const RAW_TARGET = qs.get("url") || DEFAULT_SOURCE; // 필요시 ?url=로 다른 소스 테스트 가능
 const ENDPOINT = PROXY_BASE + encodeURIComponent(RAW_TARGET);
+
+const NAME_FIX = (s) => s.replace(/^\w/, c => c.toUpperCase()); // 첫 글자 대문자
 
 function h(tag, attrs={}, ...kids) {
   const el = document.createElement(tag);
@@ -37,69 +55,85 @@ function h(tag, attrs={}, ...kids) {
   kids.flat().forEach(k => el.append(k?.nodeType ? k : String(k)));
   return el;
 }
-function fmtRemain(ms){
-  if(ms<0)ms=0;
-  const s=Math.floor(ms/1000);
-  const hh=String(Math.floor(s/3600)).padStart(2,"0");
-  const mm=String(Math.floor((s%3600)/60)).padStart(2,"0");
-  const ss=String(s%60).padStart(2,"0");
+function fmtRemain(ms) {
+  if (ms < 0) ms = 0;
+  const s = Math.floor(ms / 1000);
+  const hh = String(Math.floor(s / 3600)).padStart(2,"0");
+  const mm = String(Math.floor((s % 3600) / 60)).padStart(2,"0");
+  const ss = String(s % 60).padStart(2,"0");
   return `${hh}:${mm}:${ss}`;
 }
-function toSeoul(ts){
-  const d=new Date(ts);
-  return new Intl.DateTimeFormat("ko-KR",{
-    timeZone:"Asia/Seoul",year:"numeric",month:"2-digit",day:"2-digit",
-    hour:"2-digit",minute:"2-digit",second:"2-digit"
+function toSeoul(ts) {
+  const d = new Date(ts);
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit"
   }).format(d);
 }
 
-// ✅ 정확 매핑
-function parseRow(x){
-  const name=(x.name||"").replace(/^\w/,c=>c.toUpperCase());
-  const nextTs=Date.parse(x.resetTimestamp); // "2025-10-01T04:21:09.000Z"
-  return { name, nextTs, secondsLeft:null, totalSeconds:null };
+// 응답 → 표시용 구조로 변환
+function parseRow(x) {
+  // x = { name: "prapor", resetTimestamp: "2025-10-01T04:21:09.000Z" }
+  const rawName = String(x.name || "").toLowerCase();
+  const name = NAME_FIX(rawName);
+  const nextTs = Date.parse(x.resetTimestamp);
+  const img = TRADER_IMAGES[rawName] || "";
+  return { name, nextTs, img };
 }
 
-async function main(){
-  const app=document.getElementById("app");
-  try{
-    const r=await fetch(ENDPOINT);
-    if(!r.ok) throw new Error(`HTTP ${r.status}`);
-    const raw=await r.json();
+// 정렬: 우리가 보기 좋은 순서(선택사항)
+const TRADER_ORDER = ["prapor","therapist","fence","skier","peacekeeper","mechanic","ragman","jaeger","lightkeeper","btrdriver","ref"];
+function sortByOrder(list) {
+  const idx = new Map(TRADER_ORDER.map((n,i)=>[n,i]));
+  return list.sort((a,b) => (idx.get(a.name.toLowerCase()) ?? 999) - (idx.get(b.name.toLowerCase()) ?? 999));
+}
 
-    // ✅ 배열 경로 확정
+// 메인
+async function main() {
+  const app = document.getElementById("app");
+
+  try {
+    const r = await fetch(ENDPOINT);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const raw = await r.json();
+
+    // 구조 고정: { data: { traderResetTimes: [...] } }
     const arr = raw?.data?.traderResetTimes ?? [];
-    if(!Array.isArray(arr) || arr.length===0){
-      app.innerHTML='<div class="error">타이머 데이터가 비어있거나 구조가 다릅니다. 응답 JSON을 확인하세요.</div>';
+    if (!Array.isArray(arr) || arr.length === 0) {
+      app.innerHTML = '<div class="error">타이머 데이터가 비어있거나 구조가 다릅니다. 응답 JSON을 확인하세요.</div>';
       console.debug("raw response:", raw);
       return;
     }
 
-    const list=arr.map(parseRow).filter(r=>r.name && !isNaN(r.nextTs));
-    const grid=h("div",{class:"grid"}, list.map(row=>{
-      const timer=h("div",{class:"time"},"—");
-      const abs=h("div",{class:"hint"},"(한국 시간: "+toSeoul(row.nextTs)+")");
-      const card=h("div",{class:"card"},
-        h("div",{class:"name"},row.name),
-        timer,abs
-      );
+    let list = arr.map(parseRow).filter(r => r.name && !isNaN(r.nextTs));
+    list = sortByOrder(list);
 
-      function tick(){
-        const remainMs=row.nextTs - Date.now();
-        timer.textContent=`다음 리셋까지 ${fmtRemain(remainMs)}`;
+    const grid = h("div", { class: "grid" }, list.map(row => {
+      const imgEl = h("img", { class: "img", alt: row.name, src: row.img });
+      const nameEl = h("div", { class: "name" }, row.name);
+      const header = h("div", { class: "row" }, imgEl, nameEl);
+
+      const timer = h("div", { class: "time" }, "—");
+      const abs   = h("div", { class: "hint" }, "(한국 시간: " + toSeoul(row.nextTs) + ")");
+      const card  = h("div", { class: "card" }, header, timer, abs);
+
+      function tick() {
+        const remainMs = row.nextTs - Date.now();
+        timer.textContent = `다음 리셋까지 ${fmtRemain(remainMs)}`;
       }
       tick();
-      setInterval(tick,1000);
+      setInterval(tick, 1000);
+
       return card;
     }));
 
     app.replaceChildren(grid);
-  }catch(e){
-    app.innerHTML=`<div class="error">불러오기 실패: ${String(e)}</div>`;
+  } catch (e) {
+    app.innerHTML = `<div class="error">불러오기 실패: ${String(e)}</div>`;
   }
 }
+
 main();
 </script>
-
 </html>
-
