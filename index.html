@@ -23,123 +23,104 @@
 <div class="footer">Data: eft-ammo (<code>/api/resetTimers</code>) · Rendered client-side</div>
 
 <script>
-// ===== 설정 =====
-const PROXY_BASE = "/api/eft-proxy?url="; // 같은 Vercel 프로젝트의 서버리스 프록시 (상대경로)
+const PROXY_BASE = "/api/eft-proxy?url=";
 const DEFAULT_SOURCE = "https://www.eft-ammo.com/api/resetTimers";
 
-// 상인 이미지 매핑 (ef t-ammo 초상 URL)
-const TRADER_IMAGES = {
-  prapor:      "https://www.eft-ammo.com/%2Ftraders%2Fprapor.jpeg",
-  therapist:   "https://www.eft-ammo.com/%2Ftraders%2Ftherapist.jpeg",
-  fence:       "https://www.eft-ammo.com/%2Ftraders%2Ffence.jpeg",
-  skier:       "https://www.eft-ammo.com/%2Ftraders%2Fskier.jpeg",
-  peacekeeper: "https://www.eft-ammo.com/%2Ftraders%2Fpeacekeeper.jpeg",
-  mechanic:    "https://www.eft-ammo.com/%2Ftraders%2Fmechanic.jpeg",
-  ragman:      "https://www.eft-ammo.com/%2Ftraders%2Fragman.jpeg",
-  jaeger:      "https://www.eft-ammo.com/%2Ftraders%2Fjaeger.jpeg",
-  lightkeeper: "https://static.wikia.nocookie.net/escapefromtarkov_gamepedia/images/3/3f/ZryachiyLightkeeperArt.jpg/revision/latest/scale-to-width-down/1000?cb=20221122172003,
-
-  // 아래 두 항목은 위키 파일명이 다를 수 있어요.
-  // 일단 가장 널리 쓰이는 파일명 추정값을 넣어두고,
-  // 404가 나면 로컬/직접 올린 이미지를 쓰는 걸 권장합니다.
-  btrdriver:   "https://static.wikia.nocookie.net/escapefromtarkov_gamepedia/images/3/35/BTR_Driver_Portrait.png/revision/latest?cb=20241225203402",
-  ref:         "https://static.wikia.nocookie.net/escapefromtarkov_gamepedia/images/4/44/Ref_Infobox.png/revision/latest/scale-to-width-down/1000?cb=20250531144601" // (확실한 공식 초상 이미지가 없을 수 있음)
-};
-
-// ===== 유틸 =====
 const qs = new URLSearchParams(location.search);
-const RAW_TARGET = qs.get("url") || DEFAULT_SOURCE; // 필요시 ?url=로 다른 소스 테스트 가능
+const RAW_TARGET = qs.get("url") || DEFAULT_SOURCE;
 const ENDPOINT = PROXY_BASE + encodeURIComponent(RAW_TARGET);
 
-const NAME_FIX = (s) => s.replace(/^\w/, c => c.toUpperCase()); // 첫 글자 대문자
-
 function h(tag, attrs={}, ...kids) {
-  const el = document.createElement(tag);
+  const el=document.createElement(tag);
   for (const [k,v] of Object.entries(attrs)) (k==="class"?el.className=v:el.setAttribute(k,v));
-  kids.flat().forEach(k => el.append(k?.nodeType ? k : String(k)));
+  kids.flat().forEach(k=>el.append(k?.nodeType?k:String(k)));
   return el;
 }
-function fmtRemain(ms) {
-  if (ms < 0) ms = 0;
-  const s = Math.floor(ms / 1000);
-  const hh = String(Math.floor(s / 3600)).padStart(2,"0");
-  const mm = String(Math.floor((s % 3600) / 60)).padStart(2,"0");
-  const ss = String(s % 60).padStart(2,"0");
-  return `${hh}:${mm}:${ss}`;
-}
-function toSeoul(ts) {
-  const d = new Date(ts);
-  return new Intl.DateTimeFormat("ko-KR", {
-    timeZone: "Asia/Seoul",
-    year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", second: "2-digit"
-  }).format(d);
-}
+const NAME_FIX = s => s.replace(/^\w/,c=>c.toUpperCase());
+function fmtRemain(ms){ if(ms<0)ms=0; const s=Math.floor(ms/1000);
+  const hh=String(Math.floor(s/3600)).padStart(2,"0");
+  const mm=String(Math.floor((s%3600)/60)).padStart(2,"0");
+  const ss=String(s%60).padStart(2,"0"); return `${hh}:${mm}:${ss}`;}
+function toSeoul(ts){ const d=new Date(ts);
+  return new Intl.DateTimeFormat("ko-KR",{timeZone:"Asia/Seoul",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"}).format(d);}
 
-// 응답 → 표시용 구조로 변환
-function parseRow(x) {
-  // x = { name: "prapor", resetTimestamp: "2025-10-01T04:21:09.000Z" }
-  const rawName = String(x.name || "").toLowerCase();
+// resetTimers → [{name, resetTimestamp}]
+function parseRow(x){
+  const rawName = String(x.name||"").toLowerCase();
   const name = NAME_FIX(rawName);
   const nextTs = Date.parse(x.resetTimestamp);
-  const img = TRADER_IMAGES[rawName] || "";
-  return { name, nextTs, img };
+  return { key: rawName, name, nextTs };
 }
 
-// 정렬: 우리가 보기 좋은 순서(선택사항)
+// 표시에 쓰는 순서
 const TRADER_ORDER = ["prapor","therapist","fence","skier","peacekeeper","mechanic","ragman","jaeger","lightkeeper","btrdriver","ref"];
-function sortByOrder(list) {
-  const idx = new Map(TRADER_ORDER.map((n,i)=>[n,i]));
-  return list.sort((a,b) => (idx.get(a.name.toLowerCase()) ?? 999) - (idx.get(b.name.toLowerCase()) ?? 999));
+function sortByOrder(list){ const idx=new Map(TRADER_ORDER.map((n,i)=>[n,i]));
+  return list.sort((a,b)=>(idx.get(a.key)??999)-(idx.get(b.key)??999)); }
+
+async function fetchTimers(){
+  const r=await fetch(ENDPOINT);
+  if(!r.ok) throw new Error(`resetTimers HTTP ${r.status}`);
+  const raw=await r.json();
+  const arr=raw?.data?.traderResetTimes ?? [];
+  return arr.map(parseRow).filter(r=>!isNaN(r.nextTs));
 }
 
-// 메인
-async function main() {
-  const app = document.getElementById("app");
+async function fetchTraderImages(){
+  const gqlURL = "https://api.tarkov.dev/graphql";
+  const body = JSON.stringify({ query: `query { traders { normalizedName imageLink name } }` });
+  const r = await fetch(PROXY_BASE + encodeURIComponent(gqlURL), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body
+  });
+  if(!r.ok) throw new Error(`graphql HTTP ${r.status}`);
+  const j = await r.json();
+  const map = new Map();
+  for (const t of j?.data?.traders || []) {
+    const key = String(t.normalizedName||t.name||"").toLowerCase();
+    if (key) map.set(key, t.imageLink || "");
+  }
+  return map;
+}
 
-  try {
-    const r = await fetch(ENDPOINT);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const raw = await r.json();
+async function main(){
+  const app=document.getElementById("app");
+  try{
+    // 1) 타이머
+    let list = await fetchTimers();
+    // 2) 이미지 맵
+    const imgMap = await fetchTraderImages();
 
-    // 구조 고정: { data: { traderResetTimes: [...] } }
-    const arr = raw?.data?.traderResetTimes ?? [];
-    if (!Array.isArray(arr) || arr.length === 0) {
-      app.innerHTML = '<div class="error">타이머 데이터가 비어있거나 구조가 다릅니다. 응답 JSON을 확인하세요.</div>';
-      console.debug("raw response:", raw);
-      return;
-    }
+    // 3) btrdriver/ref 등 그래프QL에 없는 애들 fallback 처리
+    const fallback = new Map([
+      ["btrdriver",""], ["ref",""]
+    ]);
 
-    let list = arr.map(parseRow).filter(r => r.name && !isNaN(r.nextTs));
+    // 4) 조합 + 표출
     list = sortByOrder(list);
+    const grid = h("div",{class:"grid"}, list.map(row=>{
+      const imgSrc = imgMap.get(row.key) || fallback.get(row.key) || "";
+      const img = h("img",{ class:"img", alt: row.name, src: imgSrc, referrerpolicy:"no-referrer",
+        style:"width:56px;height:56px;border-radius:10px;object-fit:cover;background:#eee;" });
+      const name = h("div",{class:"name"}, row.name);
+      const header = h("div",{class:"row"}, img, name);
 
-    const grid = h("div", { class: "grid" }, list.map(row => {
-      const imgEl = h("img", { class: "img", alt: row.name, src: row.img });
-      const nameEl = h("div", { class: "name" }, row.name);
-      const header = h("div", { class: "row" }, imgEl, nameEl);
+      const timer=h("div",{class:"time"},"—");
+      const abs=h("div",{class:"hint"},"(한국 시간: "+toSeoul(row.nextTs)+")");
+      const card=h("div",{class:"card"}, header, timer, abs);
 
-      const timer = h("div", { class: "time" }, "—");
-      const abs   = h("div", { class: "hint" }, "(한국 시간: " + toSeoul(row.nextTs) + ")");
-      const card  = h("div", { class: "card" }, header, timer, abs);
-
-      function tick() {
-        const remainMs = row.nextTs - Date.now();
-        timer.textContent = `다음 리셋까지 ${fmtRemain(remainMs)}`;
-      }
-      tick();
-      setInterval(tick, 1000);
-
+      function tick(){ timer.textContent=`다음 리셋까지 ${fmtRemain(row.nextTs - Date.now())}`; }
+      tick(); setInterval(tick,1000);
       return card;
     }));
-
     app.replaceChildren(grid);
-  } catch (e) {
-    app.innerHTML = `<div class="error">불러오기 실패: ${String(e)}</div>`;
+  }catch(e){
+    app.innerHTML=`<div class="error">불러오기 실패: ${String(e)}</div>`;
   }
 }
-
 main();
 </script>
 </html>
+
 
 
