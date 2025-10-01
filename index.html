@@ -53,7 +53,7 @@ function parseRow(x){
 }
 
 // 표시에 쓰는 순서
-const TRADER_ORDER = ["prapor","therapist","fence","skier","peacekeeper","mechanic","ragman","jaeger","lightkeeper","btrdriver","ref"];
+const TRADER_ORDER = ["prapor","therapist","fence","skier","peacekeeper","mechanic","ragman","jaeger"];
 function sortByOrder(list){ const idx=new Map(TRADER_ORDER.map((n,i)=>[n,i]));
   return list.sort((a,b)=>(idx.get(a.key)??999)-(idx.get(b.key)??999)); }
 
@@ -121,6 +121,7 @@ async function main(){
 main();
 </script>
 </html>
+
 
 
 
